@@ -1,4 +1,4 @@
-name: Yanzz SSH Quick Start
+name: Yanzz SSH Telegram
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
           - debian-10
 
 jobs:
-  quick-ssh:
+  ssh-telegram:
     runs-on: ${{ github.event.inputs.os }}
     timeout-minutes: 4320  # 3 hari
 
@@ -24,12 +24,10 @@ jobs:
           path: /var/cache/apt/archives
           key: ${{ runner.os }}-apt-cache
 
-      - name: Update & Install Required Packages
+      - name: Update & Install Packages
         run: |
           sudo apt-get update -y
           sudo apt-get install -y openssh-server curl sudo || true
-
-          # Enable SSH service
           sudo systemctl enable ssh
           sudo systemctl start ssh
 
@@ -46,13 +44,13 @@ jobs:
           echo "$USERNAME:$PASSWORD" | sudo chpasswd
           sudo usermod -aG sudo $USERNAME
 
-          echo "SSH_CREDS=User: $USERNAME | Password: $PASSWORD" >> $GITHUB_ENV
+          echo "SSH_USERNAME=$USERNAME" >> $GITHUB_ENV
+          echo "SSH_PASSWORD=$PASSWORD" >> $GITHUB_ENV
 
       - name: Install & Configure Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-
-          # Background loop untuk reconnect otomatis Tailscale
+          # background reconnect
           while true; do
             if ! tailscale status >/dev/null 2>&1; then
               echo "Tailscale not connected. Reconnecting..."
@@ -66,16 +64,19 @@ jobs:
           sleep 5
           TAILSCALE_IP=$(tailscale ip -4)
           echo "TAILSCALE_IP=$TAILSCALE_IP" >> $GITHUB_ENV
-          echo "Tailscale IP: $TAILSCALE_IP"
 
-      - name: Display SSH Info
+      - name: Send SSH Info to Telegram
         run: |
-          echo "================== SSH ACCESS =================="
-          echo "OS: ${{ github.event.inputs.os }}"
-          echo "IP: ${{ env.TAILSCALE_IP }}"
-          echo "Username: yanzz"
-          echo "Password: $(echo ${{ env.SSH_CREDS }})"
-          echo "================================================"
+          MESSAGE="================== SSH ACCESS ==================
+OS: ${{ github.event.inputs.os }}
+IP: $TAILSCALE_IP
+Username: $SSH_USERNAME
+Password: $SSH_PASSWORD
+================================================"
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="$MESSAGE"
 
       - name: Keep SSH Active
         run: |
