@@ -1,0 +1,81 @@
+name: Yanzz SSH Multi-OS Stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: 'Choose OS: ubuntu-20.04 or debian-10'
+        required: true
+        default: 'ubuntu-20.04'
+        type: choice
+        options:
+          - ubuntu-20.04
+          - debian-10
+
+jobs:
+  stable-ssh:
+    runs-on: ${{ github.event.inputs.os }}
+    timeout-minutes: 4320  # 3 hari
+
+    steps:
+      - name: Update & Install Required Packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y openssh-server curl sudo
+
+          # Enable SSH service
+          sudo systemctl enable ssh
+          sudo systemctl start ssh
+
+      - name: Create SSH User
+        run: |
+          USERNAME="yanzz"
+          PASSWORD=$(openssl rand -base64 12)
+
+          # Hapus user lama jika ada
+          if id "$USERNAME" >/dev/null 2>&1; then
+            sudo deluser --remove-home $USERNAME
+          fi
+
+          sudo adduser --disabled-password --gecos "" $USERNAME
+          echo "$USERNAME:$PASSWORD" | sudo chpasswd
+          sudo usermod -aG sudo $USERNAME
+
+          echo "SSH_CREDS=User: $USERNAME | Password: $PASSWORD" >> $GITHUB_ENV
+
+      - name: Install & Configure Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+          # Background loop untuk reconnect otomatis jika Tailscale disconnect
+          while true; do
+            if ! tailscale status >/dev/null 2>&1; then
+              echo "Tailscale not connected. Reconnecting..."
+              sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$GITHUB_RUN_ID || true
+            fi
+            sleep 60
+          done &
+
+      - name: Get Tailscale IP
+        run: |
+          sleep 10
+          TAILSCALE_IP=$(tailscale ip -4)
+          echo "TAILSCALE_IP=$TAILSCALE_IP" >> $GITHUB_ENV
+          echo "Tailscale IP: $TAILSCALE_IP"
+
+      - name: Display SSH Info
+        run: |
+          echo "================== SSH ACCESS =================="
+          echo "OS: ${{ github.event.inputs.os }}"
+          echo "IP: ${{ env.TAILSCALE_IP }}"
+          echo "Username: yanzz"
+          echo "Password: $(echo ${{ env.SSH_CREDS }})"
+          echo "================================================"
+
+      - name: Keep SSH Active
+        run: |
+          # Loop untuk menjaga workflow tetap aktif dan Tailscale tetap jalan
+          while true; do
+            echo "[$(date)] SSH active via Tailscale"
+            sleep 300
+          done
