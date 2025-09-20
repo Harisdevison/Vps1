@@ -50,7 +50,7 @@ jobs:
       - name: Install & Configure Tailscale
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          # background reconnect
+          # Background loop untuk reconnect otomatis
           while true; do
             if ! tailscale status >/dev/null 2>&1; then
               echo "Tailscale not connected. Reconnecting..."
