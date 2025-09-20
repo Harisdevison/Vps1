@@ -1,27 +1,33 @@
-name: Yanzz SSH Multi-OS Stable
+name: Yanzz SSH Quick Start
 
 on:
   workflow_dispatch:
     inputs:
       os:
-        description: 'Choose OS: ubuntu-20.04 or debian-10'
+        description: 'Choose OS: ubuntu-latest or debian-10'
         required: true
-        default: 'ubuntu-20.04'
+        default: 'ubuntu-latest'
         type: choice
         options:
-          - ubuntu-20.04
+          - ubuntu-latest
           - debian-10
 
 jobs:
-  stable-ssh:
+  quick-ssh:
     runs-on: ${{ github.event.inputs.os }}
     timeout-minutes: 4320  # 3 hari
 
     steps:
+      - name: Cache apt packages
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-cache
+
       - name: Update & Install Required Packages
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y openssh-server curl sudo
+          sudo apt-get install -y openssh-server curl sudo || true
 
           # Enable SSH service
           sudo systemctl enable ssh
@@ -32,7 +38,6 @@ jobs:
           USERNAME="yanzz"
           PASSWORD=$(openssl rand -base64 12)
 
-          # Hapus user lama jika ada
           if id "$USERNAME" >/dev/null 2>&1; then
             sudo deluser --remove-home $USERNAME
           fi
@@ -47,7 +52,7 @@ jobs:
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
 
-          # Background loop untuk reconnect otomatis jika Tailscale disconnect
+          # Background loop untuk reconnect otomatis Tailscale
           while true; do
             if ! tailscale status >/dev/null 2>&1; then
               echo "Tailscale not connected. Reconnecting..."
@@ -58,7 +63,7 @@ jobs:
 
       - name: Get Tailscale IP
         run: |
-          sleep 10
+          sleep 5
           TAILSCALE_IP=$(tailscale ip -4)
           echo "TAILSCALE_IP=$TAILSCALE_IP" >> $GITHUB_ENV
           echo "Tailscale IP: $TAILSCALE_IP"
@@ -74,7 +79,6 @@ jobs:
 
       - name: Keep SSH Active
         run: |
-          # Loop untuk menjaga workflow tetap aktif dan Tailscale tetap jalan
           while true; do
             echo "[$(date)] SSH active via Tailscale"
             sleep 300
