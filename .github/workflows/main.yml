@@ -51,13 +51,15 @@ jobs:
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
           # Background loop untuk reconnect otomatis
+          nohup bash -c '
           while true; do
             if ! tailscale status >/dev/null 2>&1; then
               echo "Tailscale not connected. Reconnecting..."
               sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$GITHUB_RUN_ID || true
             fi
             sleep 60
-          done &
+          done
+          ' &
 
       - name: Get Tailscale IP
         run: |
